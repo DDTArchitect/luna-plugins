@@ -1,6 +1,6 @@
 import { MediaItem, type redux } from "@luna/lib";
 import { showOpenDialog, showSaveDialog } from "@luna/lib.native";
-import { settings } from "./Settings";
+import { settings } from "./settingsStore";
 
 import sanitize from "sanitize-filename";
 
