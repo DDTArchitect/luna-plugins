@@ -205,6 +205,11 @@ class Queue {
 		try {
 			await mediaItem.download(path, settings.downloadQuality);
 			job.completed++;
+			// Peg to 100%, the last poll usually lands a little short of the total
+			if (job.current !== undefined) {
+				job.current.percent = 100;
+				if (job.current.total > 0) job.current.downloaded = job.current.total;
+			}
 		} catch (err) {
 			job.failed++;
 			trace.msg.err.withContext(`Failed to download ${title}`)(err);
@@ -213,7 +218,9 @@ class Queue {
 			// safeInterval registers the unload but clearing it doesn't deregister,
 			// so drop it by hand or the set grows by one per downloaded track
 			unloads.delete(stopPolling);
-			job.current = undefined;
+			// Deliberately not clearing job.current: the next track doesn't set it until
+			// max() and flacTags() return, and blanking it leaves the status pill empty
+			// for that whole gap. runJob clears it once the job is actually over.
 			this.emit();
 		}
 		return true;

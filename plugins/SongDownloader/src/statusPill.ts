@@ -45,7 +45,10 @@ export const initStatusPill = () => {
 		title.innerText = `${job.label} — ${done}/${job.trackCount}`;
 
 		const parts: string[] = [];
-		if (job.current !== undefined) {
+		if (job.current === undefined) {
+			// Only until the first track of a job has had its tags loaded
+			parts.push("Preparing...");
+		} else {
 			parts.push(job.current.title);
 			if (job.current.total > 0) {
 				parts.push(`${asMB(job.current.downloaded)}/${asMB(job.current.total)}MB`);
