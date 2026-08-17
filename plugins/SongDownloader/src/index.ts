@@ -1,82 +1,45 @@
-import { Tracer, type LunaUnload } from "@luna/core";
-import { ContextMenu, safeInterval, StyleTag } from "@luna/lib";
+import { ContextMenu, StyleTag } from "@luna/lib";
 
-import { getDownloadFolder, getDownloadPath, getFileName } from "./helpers";
-import { settings } from "./Settings";
+import { getDownloadFolder } from "./helpers";
+import { DownloadQueue } from "./queue";
+import { settings } from "./settingsStore";
+import { initStatusPill } from "./statusPill";
+import { errSignal, trace, unloads } from "./tracer";
 
 import styles from "file://downloadButton.css?minify";
 
-export const { errSignal, trace } = Tracer("[SongDownloader]");
-export const unloads = new Set<LunaUnload>();
+export { errSignal, trace, unloads };
+export { Settings } from "./Settings";
 
 new StyleTag("SongDownloader", unloads, styles);
+initStatusPill();
 
 const downloadButton = ContextMenu.addButton(unloads);
-const downloadState = { active: false, cancel: false };
+const cancelButton = ContextMenu.addButton(unloads);
 
-export { Settings } from "./Settings";
 ContextMenu.onMediaItem(unloads, async ({ mediaCollection, contextMenu }) => {
 	const trackCount = await mediaCollection.count();
 	if (trackCount === 0) return;
 
-	const defaultText = (downloadButton.text = `Download ${trackCount} tracks`);
-
+	const pending = DownloadQueue.pendingCount;
+	// `pending` counts whole jobs, not tracks, so say so — "(4)" next to "11 tracks"
+	// reads as 4 tracks. "ahead" because the new job goes behind every pending one.
+	downloadButton.text =
+		pending === 0 ? `Download ${trackCount} tracks` : `Queue ${trackCount} tracks (${pending} job${pending === 1 ? "" : "s"} ahead)`;
 	downloadButton.onClick(async () => {
-		if (downloadButton.elem === undefined) return;
-		// Clicking while a download is running requests it to stop after the current track
-		if (downloadState.active) {
-			downloadState.cancel = true;
-			downloadButton.text = `Stopping...`;
-			return;
-		}
+		// The folder has to be picked while the click is still in hand, prompting once the
+		// job reaches the front of the queue would ambush the user minutes later
 		const downloadFolder = settings.defaultPath ?? (trackCount > 1 ? await getDownloadFolder() : undefined);
-		downloadState.active = true;
-		downloadState.cancel = false;
-		downloadButton.elem.classList.add("download-button");
-		try {
-			for await (let mediaItem of await mediaCollection.mediaItems()) {
-				if (downloadState.cancel) break;
-				if (settings.useRealMAX) {
-					downloadButton.text = `Checking RealMax...`;
-					mediaItem = (await mediaItem.max()) ?? mediaItem;
-				}
-
-				downloadButton.text = `Loading tags...`;
-				const { tags } = await mediaItem.flacTags();
-
-				downloadButton.text = `Fetching filename...`;
-				const fileName = await getFileName(mediaItem, settings.downloadQuality);
-
-				downloadButton.text = `Fetching download path...`;
-				const path = downloadFolder !== undefined ? [downloadFolder, fileName] : await getDownloadPath(fileName);
-				if (path === undefined) return;
-
-				downloadButton.text = `Downloading...`;
-				const clearInterval = safeInterval(
-					unloads,
-					async () => {
-						const progress = await mediaItem.downloadProgress();
-						if (progress === undefined) return;
-						const { total, downloaded } = progress;
-						if (total === undefined || downloaded === undefined) return;
-						const percent = (downloaded / total) * 100;
-						downloadButton.elem!.style.setProperty("--progress", `${percent}%`);
-						const downloadedMB = (downloaded / 1048576).toFixed(0);
-						const totalMB = (total / 1048576).toFixed(0);
-						downloadButton.text = `Downloading... ${downloadedMB}/${totalMB}MB ${percent.toFixed(0)}%`;
-					},
-					50,
-				);
-				await mediaItem.download(path, settings.downloadQuality).catch(trace.msg.err.withContext(`Failed to download ${tags.title}`));
-				clearInterval();
-			}
-		} finally {
-			downloadState.active = false;
-			downloadState.cancel = false;
-			downloadButton.text = defaultText;
-			downloadButton.elem?.classList.remove("download-button");
-		}
+		// Dismissing the folder picker means don't download, not download somewhere else
+		if (trackCount > 1 && downloadFolder === undefined) return;
+		await DownloadQueue.enqueue(mediaCollection, downloadFolder).catch(trace.msg.err.withContext("Failed to queue download"));
 	});
-
 	await downloadButton.show(contextMenu);
+
+	// Only offered while there is something to cancel
+	if (pending > 0) {
+		cancelButton.text = `Cancel downloads (${pending})`;
+		cancelButton.onClick(() => DownloadQueue.cancelAll());
+		await cancelButton.show(contextMenu);
+	}
 });
