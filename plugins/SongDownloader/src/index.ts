@@ -22,10 +22,10 @@ ContextMenu.onMediaItem(unloads, async ({ mediaCollection, contextMenu }) => {
 	if (trackCount === 0) return;
 
 	const pending = DownloadQueue.pendingCount;
-	// `pending` counts whole downloads, not tracks, so say so — "(4)" next to "11 tracks"
+	// `pending` counts whole jobs, not tracks, so say so — "(4)" next to "11 tracks"
 	// reads as 4 tracks. "ahead" because the new job goes behind every pending one.
 	downloadButton.text =
-		pending === 0 ? `Download ${trackCount} tracks` : `Queue ${trackCount} tracks (${pending} download${pending === 1 ? "" : "s"} ahead)`;
+		pending === 0 ? `Download ${trackCount} tracks` : `Queue ${trackCount} tracks (${pending} job${pending === 1 ? "" : "s"} ahead)`;
 	downloadButton.onClick(async () => {
 		// The folder has to be picked while the click is still in hand, prompting once the
 		// job reaches the front of the queue would ambush the user minutes later
