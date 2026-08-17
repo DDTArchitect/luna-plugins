@@ -104,7 +104,8 @@ export const initStatusPill = () => {
 		if (queued === 0) pill.classList.remove("expanded");
 		const expanded = pill.classList.contains("expanded");
 		expand.hidden = queued === 0;
-		expand.innerText = `${queued} queued ${expanded ? "▴" : "▾"}`;
+		// "downloads", not a bare count — the line around it is all track-level numbers
+		expand.innerText = `${queued} download${queued === 1 ? "" : "s"} ${expanded ? "▴" : "▾"}`;
 		expand.title = expanded ? "Hide the queue" : "Show what else is queued";
 		renderList();
 
