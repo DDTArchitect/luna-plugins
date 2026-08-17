@@ -22,7 +22,8 @@ ContextMenu.onMediaItem(unloads, async ({ mediaCollection, contextMenu }) => {
 	if (trackCount === 0) return;
 
 	const pending = DownloadQueue.pendingCount;
-	downloadButton.text = pending === 0 ? `Download ${trackCount} tracks` : `Queue ${trackCount} tracks (${pending} downloading)`;
+	// "downloading" overstates it, only one of the pending jobs is ever actually transferring
+	downloadButton.text = pending === 0 ? `Download ${trackCount} tracks` : `Queue ${trackCount} tracks (${pending} in queue)`;
 	downloadButton.onClick(async () => {
 		// The folder has to be picked while the click is still in hand, prompting once the
 		// job reaches the front of the queue would ambush the user minutes later

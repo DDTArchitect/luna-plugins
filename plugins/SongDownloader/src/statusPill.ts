@@ -13,6 +13,9 @@ export const initStatusPill = () => {
 	const pill = document.createElement("div");
 	pill.className = "song-downloader-pill";
 
+	const row = document.createElement("div");
+	row.className = "song-downloader-pill-row";
+
 	const text = document.createElement("div");
 	text.className = "song-downloader-pill-text";
 
@@ -22,25 +25,65 @@ export const initStatusPill = () => {
 	detail.className = "song-downloader-pill-detail";
 	text.append(title, detail);
 
+	const expand = document.createElement("button");
+	expand.className = "song-downloader-pill-expand";
+	expand.onclick = () => {
+		pill.classList.toggle("expanded");
+		render();
+	};
+
 	const cancel = document.createElement("button");
 	cancel.className = "song-downloader-pill-cancel";
-	cancel.title = "Stop after this track";
+	cancel.title = "Cancel everything";
 	cancel.innerText = "✕";
 	cancel.onclick = () => DownloadQueue.cancelAll();
 
-	pill.append(text, cancel);
+	row.append(text, expand, cancel);
+
+	const list = document.createElement("ol");
+	list.className = "song-downloader-pill-list";
+
+	pill.append(row, list);
 	document.body.appendChild(pill);
 	unloads.add(() => pill.remove());
+
+	// Rebuilding the rows on every progress tick would throw away clicks mid-press,
+	// so only redraw when the set of queued jobs actually changes
+	let renderedIds = "";
+	const renderList = () => {
+		const queued = DownloadQueue.getJobs().filter((job) => job.status === "queued");
+		const ids = queued.map((job) => job.id).join(",");
+		if (ids === renderedIds) return;
+		renderedIds = ids;
+
+		list.replaceChildren(
+			...queued.map((job) => {
+				const item = document.createElement("li");
+
+				const name = document.createElement("span");
+				name.className = "song-downloader-pill-list-name";
+				name.innerText = `${job.label} — ${job.trackCount} tracks`;
+
+				const drop = document.createElement("button");
+				drop.className = "song-downloader-pill-cancel";
+				drop.title = `Remove ${job.label} from the queue`;
+				drop.innerText = "✕";
+				drop.onclick = () => DownloadQueue.cancel(job.id);
+
+				item.append(name, drop);
+				return item;
+			}),
+		);
+	};
 
 	const render = () => {
 		const job = DownloadQueue.activeJob;
 		if (job === undefined) {
-			pill.classList.remove("visible");
+			pill.classList.remove("visible", "expanded");
 			return;
 		}
 		pill.classList.add("visible");
 
-		const queued = DownloadQueue.pendingCount - 1;
 		const done = Math.min(job.completed + job.failed + 1, job.trackCount);
 		title.innerText = `${job.label} — ${done}/${job.trackCount}`;
 
@@ -55,8 +98,15 @@ export const initStatusPill = () => {
 				parts.push(`${job.current.percent.toFixed(0)}%`);
 			}
 		}
-		if (queued > 0) parts.push(`${queued} queued`);
 		detail.innerText = parts.join(" · ");
+
+		const queued = DownloadQueue.pendingCount - 1;
+		if (queued === 0) pill.classList.remove("expanded");
+		const expanded = pill.classList.contains("expanded");
+		expand.hidden = queued === 0;
+		expand.innerText = `${queued} queued ${expanded ? "▴" : "▾"}`;
+		expand.title = expanded ? "Hide the queue" : "Show what else is queued";
+		renderList();
 
 		pill.style.setProperty("--progress", `${job.current?.percent ?? 0}%`);
 	};
